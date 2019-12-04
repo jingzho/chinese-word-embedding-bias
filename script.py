@@ -1,9 +1,7 @@
-'''
-Part1: Find Bias
-'''
 from __future__ import print_function, division
-
 from matplotlib import pyplot as plt
+
+import sys
 import json
 import random
 import numpy as np
@@ -11,54 +9,99 @@ import numpy as np
 import debiaswe as dwe
 import debiaswe.we as we
 from debiaswe.we import WordEmbedding
-from debiaswe.data import load_professions
+from debiaswe.data import load_professionals
 
-# Step 1: Load Data (Word embedding)
+'''
+Part1: Find Bias
+'''
+# Step 1: Load Data (Word embedding & professionals)
 E = WordEmbedding('./data/file_small.txt')
+professionals = load_professionals()
 
-# Step 2.1: Define regional (Northern China people - Southern China people) direction directly
-v_region = E.diff('北方人', '南方人')
+# Step 2: Define regional (Northern China people - Southern China people) direction directly
+v_region = E.diff('北京人', '上海人')
+v_gender = E.diff('男', '女')
 
 # Step 3: Generating analogies of "Northern people: x :: Southern people: y
-a_region = E.best_analogies_dist_thresh(v_region)
-for (a,b,c) in a_region:
-    print(a+"-"+b+":"+str(c))
+# a_region = E.best_analogies_dist_thresh(v_region)
+# before_map = {}
+output = open("output.txt", "a")
+# for (a,b,c) in a_region:
+#     before_map[a] = b
+#     print(a+"-"+b+"-"+str(c), file=output)
 
-# Step 4: Project character adjectives onto the regional dimension.
-adjs = ["漂亮", "完美", "快乐", "聪明", "豁达", "舒服", "自豪", "善良", "自信", "温柔", "靠谱",
-       "开心", "幸福", "有趣", "可爱", "不错", "美丽", "有名", "幽默", "友善", "勤奋", "直爽",
-       "贤惠", "正直", "坦诚", "活泼", "高尚", "苗条", "纯洁", "得体", "优雅", "敏捷", "热情似火",
-       "文质彬彬", "兴致勃勃", "勇往直前", "人高马大", "博学多才", "学富五车", "厚德载物", "积极进取", "拾金不昧", "大公无私",
-       "平静", "冷静", "有钱", "贫穷", "仁慈", "温雅", "外向", "内向", "和平", "搞笑", "精明", "高大", "矮小",
-       "爱心", "害羞", "努力", "尊重", "正常", "真实", "文明", "忙碌", "悠闲", "时尚", "老土", 
-       "怀旧", "漂泊", "感性", "理性", "普通", "独立", "天真", "谨慎", "随和", "淳朴", "政治正确",
-       "触景生情", "察言观色", "雄心勃勃", "不吵不闹", "劫富济贫", "谈笑风生", "高谈阔论", "中规中矩", "成熟稳重", "大名鼎鼎",
-       "难过", "马虎", "愚蠢", "冷漠", "慌张", "无聊", "恶心", "狡猾", "抑郁", "悲伤", "装逼",
-       "不好", "奇怪", "坏", "麻木", "难听", "色情", "可怜", "邪恶", "委屈", "霸道", "小气",
-       "花心", "恐怖", "反感", "病态", "虚伪", "自闭", "啰嗦", "自私", "蛮横", "懒惰", "偷鸡摸狗",
-       "不思进取", "无所事事", "阴阳怪气", "一塌糊涂", "好吃懒做", "无事生非", "落井下石", "同流合污", "优柔寡断", "心术不正"]
+# Step 4: Project professionals words onto the regional & gender dimension.
+def project(v):
+	sp = sorted([(E.v(p).dot(v), p) for p in professionals])
+	print(sp[0:20], file=output)
+	print(sp[-20:], file=output)
 
-sp = sorted([(E.v(adj).dot(v_region), adj) for adj in adjs])
-print(sp[0:20], sp[-20:])
+project(v_region)
+project(v_gender)
 
 
 '''
-Part2: Debias
+Part2: Debiaswe
 '''
-import sys
 sys.path.insert(0, "./debiaswe")
 from debiaswe.debias import debias
 
 # Load some region related word lists to debias
-with open('./data/definitional_pairs.json', "r") as f:
-    defs = json.load(f)
-print("definitional", defs)
+with open('./data/region_definitional_pairs.json', "r") as f:
+    region_defs = json.load(f)
+print("definitional", region_defs, file=output)
 
-with open('./data/equalize_pairs.json', "r") as f:
-    equalize_pairs = json.load(f)
+with open('./data/region_equalize_pairs.json', "r") as f:
+    region_equalize_pairs = json.load(f)
+print("equalize pairs", region_equalize_pairs, file=output)
+
+with open('./data/region_specific_seed.json', "r") as f:
+    region_specific_words = json.load(f)
+print("regional specific", len(region_specific_words), region_specific_words[:10], file=output)
+
+debias(E, region_specific_words, region_defs, region_equalize_pairs)
+
+'''
+Part3: Result analysis
+'''
+sp_region_debiased = sorted([(E.v(p).dot(v_region), p) for p in professionals])
+print("===============region_debiased===============", file=output)
+print(sp_region_debiased[0:20], file=output)
+print(sp_region_debiased[-20:], file=output)
+
+
+'''
+Similarly, apply to gender
+'''
+with open('./data/gender_definitional_pairs.json', "r") as f:
+    gender_defs = json.load(f)
+print("definitional", gender_defs, file=output)
+
+with open('./data/gender_equalize_pairs.json', "r") as f:
+    gender_equalize_pairs = json.load(f)
+print("equalize pairs", gender_equalize_pairs, file=output)
 
 with open('./data/gender_specific_seed.json', "r") as f:
     gender_specific_words = json.load(f)
-print("gender specific", len(gender_specific_words), gender_specific_words[:10])
+print("gender specific", len(gender_specific_words), gender_specific_words[:10], file=output)
 
-debias(E, gender_specific_words, defs, equalize_pairs)
+debias(E, gender_specific_words, gender_defs, gender_equalize_pairs)
+
+sp_region_gender_debiased = sorted([(E.v(p).dot(v_gender), p) for p in professionals])
+print("===============gender_debiased===============", file=output)
+print(sp_region_gender_debiased[0:20], file=output)
+print(sp_region_gender_debiased[-20:], file=output)
+
+
+
+# analogies
+# a_region_debiased = E.best_analogies_dist_thresh(v_region)
+
+# for (a,b,c) in a_region_debiased:
+#     if a in before_map and b != before_map[a]:
+#         print("--------------------------------", file=output)
+#         print("Before:", a+"-"+before_map[a], file=output)
+#         print("After:", a+"-"+b, file=output)
+
+print("Completed")
+f.close() 
